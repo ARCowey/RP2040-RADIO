@@ -1,0 +1,35 @@
+; Derived from RPiks/pico-hf-oscillator (MIT), simplified for this project.
+.program dco
+.wrap_target
+    out y, 32
+    mov x, y
+loop0:
+    jmp x-- loop0
+    set pins, 1
+    mov x, y [1]
+loop1:
+    jmp x-- loop1
+    set pins, 0
+    mov x, y [1]
+loop2:
+    jmp x-- loop2
+    set pins, 1
+    mov x, y [1]
+loop3:
+    jmp x-- loop3
+    set pins, 0
+.wrap
+
+% c-sdk {
+#define PIODCO_DELAY_CYCLES 4
+static inline void dco_program_init(PIO pio, uint sm, uint offset, uint pin) {
+    pio_sm_config c = dco_program_get_default_config(offset);
+    sm_config_set_out_shift(&c, true, true, 32);
+    sm_config_set_fifo_join(&c, PIO_FIFO_JOIN_TX);
+    sm_config_set_set_pins(&c, pin, 1);
+    pio_gpio_init(pio, pin);
+    pio_sm_set_consecutive_pindirs(pio, sm, pin, 1, true);
+    sm_config_set_clkdiv_int_frac(&c, 1u, 0u);
+    pio_sm_init(pio, sm, offset, &c);
+}
+%}
