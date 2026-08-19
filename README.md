@@ -10,6 +10,8 @@ Firmware experimental para **Waveshare RP2040-Zero** que recibe audio por USB y 
 - El dispositivo se presenta al PC como dispositivo de audio USB.
 - GitHub Actions genera `RP2040-Zero-GP6-90MHz-USB-Audio.uf2` automáticamente.
 
+La rama `gp6-usb-fm` es la rama de validación del firmware y dispara el workflow de compilación en cada actualización.
+
 ## Seguridad RF
 
 No conectes una antena ni un cable largo directamente a GP6. La salida digital contiene armónicos y espurias. Para cualquier uso radiado se necesita filtrado RF apropiado y cumplir la normativa local.
