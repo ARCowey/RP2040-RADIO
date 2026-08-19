@@ -26,7 +26,7 @@ cmake.write_text(s)
 
 src = fm_dir / "audio_fm_transmitter.c"
 s = src.read_text()
-s = s.replace('#include "pico_fractional_pll.h"', '#include "piodco/piodco.h"')
+s = s.replace('#include "pico_fractional_pll.h"', '#include "piodco/piodco.h"\n#include "hardware/clocks.h"')
 s = s.replace(
     "static uint32_t g_transmit_freq_base_hz = 87900000;",
     "static uint32_t g_transmit_freq_base_hz = 89992500;\n"
