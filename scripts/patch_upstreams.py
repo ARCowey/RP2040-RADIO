@@ -58,4 +58,17 @@ s = s.replace('"Pico Examples Sound Card"', '"RP2040-Zero GP6 FM"')
 s = s.replace("    set_sys_clock_48mhz();", "    set_sys_clock_khz(270000, true);")
 usb.write_text(s)
 
+# The old sample calls pico_add_extra_outputs(), which performs several
+# post-link passes we do not need. For this firmware we only need the UF2.
+# Keeping the binary-type setting before UF2 generation also matches current
+# Pico SDK ordering expectations.
+usb_cmake = playground / "apps/usb_sound_card/CMakeLists.txt"
+s = usb_cmake.read_text()
+old_outputs = '''    target_link_libraries(usb_sound_card_fm_transmitter pico_stdlib usb_device pico_audio_fm_transmitter pico_multicore)\n    pico_add_extra_outputs(usb_sound_card_fm_transmitter)\n    pico_set_binary_type(usb_sound_card_fm_transmitter copy_to_ram)\n'''
+new_outputs = '''    target_link_libraries(usb_sound_card_fm_transmitter pico_stdlib usb_device pico_audio_fm_transmitter pico_multicore)\n    pico_set_binary_type(usb_sound_card_fm_transmitter copy_to_ram)\n    pico_add_uf2_output(usb_sound_card_fm_transmitter)\n'''
+if old_outputs not in s:
+    raise SystemExit("Could not find FM target output block")
+s = s.replace(old_outputs, new_outputs)
+usb_cmake.write_text(s)
+
 print("Patched upstream FM transmitter for RP2040-Zero GP6 / 90 MHz third harmonic")
