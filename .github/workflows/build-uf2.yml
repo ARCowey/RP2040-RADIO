@@ -6,50 +6,91 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: rp2040-gp6-fm-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      NINJA_STATUS: "[%f/%t %es] "
+
     steps:
       - name: Checkout project
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install ARM toolchain
+        timeout-minutes: 5
         run: |
+          set -euxo pipefail
           sudo apt-get update
           sudo apt-get install -y cmake ninja-build gcc-arm-none-eabi libnewlib-arm-none-eabi build-essential python3
 
       - name: Fetch Pico SDK and upstream FM sources
+        timeout-minutes: 6
         run: |
+          set -euxo pipefail
           git clone --depth 1 --branch 2.1.0 https://github.com/raspberrypi/pico-sdk.git
           git -C pico-sdk submodule update --init --depth 1
+
           git clone https://github.com/kaduhi/pico-extras.git
           git -C pico-extras checkout 6a53bc4d89e087ce416fdfa84b197569f15201f8
           git -C pico-extras submodule update --init --recursive
+
           git clone https://github.com/kaduhi/pico-playground.git
           git -C pico-playground checkout 3d80b25a8c3f685947d357f418498a7c535c1500
 
       - name: Apply GP6 / 90 MHz adaptation
-        run: python3 scripts/patch_upstreams.py
+        run: |
+          set -euxo pipefail
+          python3 scripts/patch_upstreams.py
+          grep -n "pico_add_uf2_output(usb_sound_card_fm_transmitter)" pico-playground/apps/usb_sound_card/CMakeLists.txt
+          grep -n "hardware/clocks.h" pico-extras/src/rp2_common/pico_audio_fm_transmitter/audio_fm_transmitter.c
 
       - name: Configure
+        timeout-minutes: 4
         env:
           PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
           PICO_EXTRAS_PATH: ${{ github.workspace }}/pico-extras
         run: |
-          cmake -S pico-playground -B build -G Ninja -DPICO_BOARD=pico -DCMAKE_BUILD_TYPE=Release
+          set -euxo pipefail
+          cmake -S pico-playground -B build -G Ninja \
+            -DPICO_BOARD=pico \
+            -DCMAKE_BUILD_TYPE=Release
 
       - name: Build USB FM transmitter
-        run: cmake --build build --target usb_sound_card_fm_transmitter -j2
+        timeout-minutes: 10
+        run: |
+          set -o pipefail
+          timeout --foreground 9m cmake --build build --target usb_sound_card_fm_transmitter -- -j1 -v 2>&1 | tee build.log
 
       - name: Collect UF2
         run: |
+          set -euxo pipefail
+          test -s build/apps/usb_sound_card/usb_sound_card_fm_transmitter.uf2
           mkdir -p dist
           cp build/apps/usb_sound_card/usb_sound_card_fm_transmitter.uf2 dist/RP2040-Zero-GP6-90MHz-USB-Audio.uf2
           sha256sum dist/*.uf2 | tee dist/SHA256SUMS.txt
+          ls -lh dist/
 
       - name: Upload UF2 artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: RP2040-Zero-GP6-90MHz-USB-Audio
           path: dist/
           if-no-files-found: error
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: RP2040-GP6-build-diagnostics-${{ github.run_number }}
+          path: build.log
+          if-no-files-found: ignore
+          retention-days: 3
